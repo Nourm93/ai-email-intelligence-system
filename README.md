@@ -651,9 +651,9 @@ ai-email-intelligence-system/
 
 ## License
 
-Choose a license before publishing if you want other people to reuse or
-modify the workflow. MIT is a common option for open-source example
-projects.
+This project is licensed under the MIT License.
+
+See the [LICENSE](LICENSE) file for details.
 
 ------------------------------------------------------------------------
 
