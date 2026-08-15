@@ -18,7 +18,12 @@ standalone chatbot.
 
 The workflow combines event-driven automation, structured AI outputs,
 validation, branching, retry logic, multi-model fallback, data
-normalization, and database storage.
+
+## Successful Workflow Execution
+
+The workflow was tested end-to-end with a sample email. The execution below shows the successful processing path through classification, validation, AI summarization, normalization, and Notion storage.
+<img width="3978" height="2378" alt="IMG_5725" src="https://github.com/user-attachments/assets/c9104895-2cb3-48da-aa28-9ad20a57f526" />
+
 
 ## Architecture
 
