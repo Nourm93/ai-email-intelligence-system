@@ -1,0 +1,513 @@
+{
+  "name": "AI Email Intelligence System",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "maxResults": 1,
+        "filters": {
+          "q": "-from:YOUR_EMAIL@example.com"
+        }
+      },
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -464,
+        -16
+      ],
+      "id": "f5c0315c-b927-4ade-8b37-3ae791c5a3ae",
+      "name": "Gmail Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "messageId": "={{ $json.id }}",
+        "simple": false,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -256,
+        -16
+      ],
+      "id": "4c56a693-9446-424b-899b-53404f3540f2",
+      "name": "Get a message",
+      "webhookId": "3eb95090-821b-491a-97fe-78e9e27a112d"
+    },
+    {
+      "parameters": {
+        "operation": "removeItemsSeenInPreviousExecutions",
+        "dedupeValue": "={{ $json.id }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.removeDuplicates",
+      "typeVersion": 2,
+      "position": [
+        -48,
+        -128
+      ],
+      "id": "074cdff9-0e90-486b-a6b8-3f6ddac3fa78",
+      "name": "Remove Duplicates"
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $json.output?.[0]?.content?.[0]?.text;\n\nif (typeof raw !== 'string' || raw.trim() === '') {\n  throw new Error('AI Classifier returned no text output.');\n}\n\nconst cleaned = raw\n  .replace(/^```json\\s*/i, '')\n  .replace(/^```\\s*/i, '')\n  .replace(/\\s*```$/i, '')\n  .trim();\n\nlet classification;\n\ntry {\n  classification = JSON.parse(cleaned);\n} catch (error) {\n  throw new Error(`Classifier output is not valid JSON: ${error.message}`);\n}\n\nconst allowedCategories = [\n  'work',\n  'personal',\n  'finance',\n  'appointment',\n  'security',\n  'newsletter',\n  'promotion',\n  'other',\n];\n\nif (typeof classification.important !== 'boolean') {\n  throw new Error('\"important\" must be true or false.');\n}\n\nif (\n  typeof classification.category !== 'string' ||\n  !allowedCategories.includes(classification.category)\n) {\n  throw new Error(\n    `\"category\" must be one of: ${allowedCategories.join(', ')}`\n  );\n}\n\nif (\n  typeof classification.reason !== 'string' ||\n  classification.reason.trim() === ''\n) {\n  throw new Error('\"reason\" must be a non-empty string.');\n}\n\nreturn {\n  json: {\n    valid: true,\n    important: classification.important,\n    category: classification.category,\n    reason: classification.reason.trim(),\n  },\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        512,
+        -16
+      ],
+      "id": "5ba8daa8-5244-48b0-bdee-9aad770e9bff",
+      "name": "Validate Classification"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "fe927793-a751-4513-aa98-74c616404131",
+              "leftValue": "={{ $json.important }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        784,
+        0
+      ],
+      "id": "e6c753d6-02f2-479e-adcb-ebf7fe091c56",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "claude-opus-4-6",
+          "mode": "list",
+          "cachedResultName": "claude-opus-4-6"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are a professional email summarizer.\n\nAnalyze the email below and return ONLY valid JSON.\n\nUse exactly this structure:\n\n{\n  \"summary\": \"maximum 3 short sentences\",\n  \"action_items\": [\"action 1\", \"action 2\"],\n  \"deadline\": \"deadline if mentioned, otherwise null\",\n  \"priority\": \"low, medium, or high\"\n}\n\nRules:\n- Do not invent information.\n- Keep the summary factual and concise.\n- If there are no action items, return an empty array [].\n- If no deadline is mentioned, return null.\n- priority must be exactly one of: low, medium, high.\n- Return JSON only. No markdown. No explanation.\n\nEmail:{{\n  $(\"Get a message\").item.json.text?.trim()\n    ? $(\"Get a message\").item.json.text\n    : $(\"Get a message\").item.json.html\n}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.anthropic",
+      "typeVersion": 1,
+      "position": [
+        1024,
+        -16
+      ],
+      "id": "9178c623-f9da-4b81-bc72-8e3aad2110af",
+      "name": "AI Summarizer"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Claude-Antwort holen\nconst raw =\n  $json.content ??\n  $json.text ??\n  $json.response ??\n  $json.output?.[0]?.content?.[0]?.text;\n\n// 2. Prüfen, ob überhaupt Text angekommen ist\nif (typeof raw !== 'string' || raw.trim() === '') {\n  throw new Error('Summarizer returned no text output.');\n}\n\n// 3. Falls Claude ```json ... ``` benutzt hat, entfernen wir diese Markdown-Hülle\nconst cleaned = raw\n  .replace(/^```json\\s*/i, '')\n  .replace(/^```\\s*/i, '')\n  .replace(/\\s*```$/i, '')\n  .trim();\n\n// 4. JSON-Text in ein echtes JavaScript-Objekt umwandeln\nlet summary;\n\ntry {\n  summary = JSON.parse(cleaned);\n} catch (error) {\n  throw new Error(`Summarizer output is not valid JSON: ${error.message}`);\n}\n\n// 5. Erlaubte Prioritäten festlegen\nconst allowedPriorities = ['low', 'medium', 'high'];\n\n// 6. summary validieren\nif (\n  typeof summary.summary !== 'string' ||\n  summary.summary.trim() === ''\n) {\n  throw new Error('\"summary\" must be a non-empty string.');\n}\n\n// 7. action_items validieren\nif (!Array.isArray(summary.action_items)) {\n  throw new Error('\"action_items\" must be an array.');\n}\n\nfor (const item of summary.action_items) {\n  if (typeof item !== 'string' || item.trim() === '') {\n    throw new Error(\n      'Every item inside \"action_items\" must be a non-empty string.'\n    );\n  }\n}\n\n// 8. deadline validieren\nif (\n  summary.deadline !== null &&\n  typeof summary.deadline !== 'string'\n) {\n  throw new Error('\"deadline\" must be a string or null.');\n}\n\n// 9. priority validieren\nif (\n  typeof summary.priority !== 'string' ||\n  !allowedPriorities.includes(summary.priority)\n) {\n  throw new Error(\n    '\"priority\" must be exactly one of: low, medium, high.'\n  );\n}\n\n// 10. Sauberen, normalisierten Output an die nächste Node weitergeben\nreturn {\n  json: {\n    valid: true,\n    summary: summary.summary.trim(),\n    action_items: summary.action_items.map(item => item.trim()),\n    deadline:\n      typeof summary.deadline === 'string'\n        ? summary.deadline.trim()\n        : null,\n    priority: summary.priority\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1376,
+        -16
+      ],
+      "id": "56928b99-8c15-413c-b61c-7ce2807eb9e3",
+      "name": "Validate Summarizer",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "claude-opus-4-6",
+          "mode": "list",
+          "cachedResultName": "claude-opus-4-6"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=The previous attempt failed validation.\n\nReturn ONLY valid JSON.\nDo not use markdown.\nDo not use ```json.\nDo not explain anything outside the JSON.\n\nUse exactly this structure:\n\n{\n  \"summary\": \"maximum 3 short sentences\",\n  \"action_items\": [\"action 1\", \"action 2\"],\n  \"deadline\": \"deadline if mentioned, otherwise null\",\n  \"priority\": \"low, medium, or high\"\n}\n\nRules:\n- Do not invent information.\n- summary must be a non-empty string.\n- action_items must be an array of strings.\n- If there are no action items, return [].\n- deadline must be a string or null.\n- priority must be exactly one of: low, medium, high.\n\nEmail:{{\n  $(\"Get a message\").item.json.text?.trim()\n    ? $(\"Get a message\").item.json.text\n    : $(\"Get a message\").item.json.html\n}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.anthropic",
+      "typeVersion": 1,
+      "position": [
+        1584,
+        80
+      ],
+      "id": "15519db8-e80b-48c6-8623-ff32786588a2",
+      "name": "Retry Claude Summarizer"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// 1. Claude-Antwort holen\nconst raw =\n  $json.content ??\n  $json.text ??\n  $json.response ??\n  $json.output?.[0]?.content?.[0]?.text;\n\n// 2. Prüfen, ob überhaupt Text angekommen ist\nif (typeof raw !== 'string' || raw.trim() === '') {\n  throw new Error('Summarizer returned no text output.');\n}\n\n// 3. Falls Claude ```json ... ``` benutzt hat, entfernen wir diese Markdown-Hülle\nconst cleaned = raw\n  .replace(/^```json\\s*/i, '')\n  .replace(/^```\\s*/i, '')\n  .replace(/\\s*```$/i, '')\n  .trim();\n\n// 4. JSON-Text in ein echtes JavaScript-Objekt umwandeln\nlet summary;\n\ntry {\n  summary = JSON.parse(cleaned);\n} catch (error) {\n  throw new Error(`Summarizer output is not valid JSON: ${error.message}`);\n}\n\n// 5. Erlaubte Prioritäten festlegen\nconst allowedPriorities = ['low', 'medium', 'high'];\n\n// 6. summary validieren\nif (\n  typeof summary.summary !== 'string' ||\n  summary.summary.trim() === ''\n) {\n  throw new Error('\"summary\" must be a non-empty string.');\n}\n\n// 7. action_items validieren\nif (!Array.isArray(summary.action_items)) {\n  throw new Error('\"action_items\" must be an array.');\n}\n\nfor (const item of summary.action_items) {\n  if (typeof item !== 'string' || item.trim() === '') {\n    throw new Error(\n      'Every item inside \"action_items\" must be a non-empty string.'\n    );\n  }\n}\n\n// 8. deadline validieren\nif (\n  summary.deadline !== null &&\n  typeof summary.deadline !== 'string'\n) {\n  throw new Error('\"deadline\" must be a string or null.');\n}\n\n// 9. priority validieren\nif (\n  typeof summary.priority !== 'string' ||\n  !allowedPriorities.includes(summary.priority)\n) {\n  throw new Error(\n    '\"priority\" must be exactly one of: low, medium, high.'\n  );\n}\n\n// 10. Sauberen, normalisierten Output an die nächste Node weitergeben\nreturn {\n  json: {\n    valid: true,\n    summary: summary.summary.trim(),\n    action_items: summary.action_items.map(item => item.trim()),\n    deadline:\n      typeof summary.deadline === 'string'\n        ? summary.deadline.trim()\n        : null,\n    priority: summary.priority\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1936,
+        80
+      ],
+      "id": "67430bfa-c3d3-4de1-aeff-9e6cb84f0f63",
+      "name": "Validate Retry JSON",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4.1-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=You are the fallback email summarization system.\n\nThe primary AI model and its retry failed to produce output that passed validation.\nAnalyze the original email below and return ONLY valid JSON.\n\nUse exactly this structure:\n\n{\n  \"summary\": \"maximum 3 short sentences\",\n  \"action_items\": [\"action 1\", \"action 2\"],\n  \"deadline\": \"deadline if mentioned, otherwise null\",\n  \"priority\": \"low, medium, or high\"\n}\n\nSTRICT RULES:\n- Return ONLY the JSON object.\n- Do not use Markdown.\n- Do not use ```json or code fences.\n- Do not add explanations before or after the JSON.\n- Do not invent information.\n- \"summary\" must be a non-empty string.\n- \"action_items\" must be an array of strings.\n- If there are no action items, return [].\n- \"deadline\" must be a string if a deadline exists.\n- If no deadline is mentioned, return null.\n- \"priority\" must be exactly one of: \"low\", \"medium\", \"high\".\n\nOriginal email:{{\n  $(\"Get a message\").item.json.text?.trim()\n    ? $(\"Get a message\").item.json.text\n    : $(\"Get a message\").item.json.html\n}}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        2144,
+        176
+      ],
+      "id": "acfc0fc2-b8f8-477b-ad15-640badcce244",
+      "name": "Fallback OpenAI"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// 1. Claude-Antwort holen\nconst raw =\n  $json.content ??\n  $json.text ??\n  $json.response ??\n  $json.output?.[0]?.content?.[0]?.text;\n\n// 2. Prüfen, ob überhaupt Text angekommen ist\nif (typeof raw !== 'string' || raw.trim() === '') {\n  throw new Error('Summarizer returned no text output.');\n}\n\n// 3. Falls Claude ```json ... ``` benutzt hat, entfernen wir diese Markdown-Hülle\nconst cleaned = raw\n  .replace(/^```json\\s*/i, '')\n  .replace(/^```\\s*/i, '')\n  .replace(/\\s*```$/i, '')\n  .trim();\n\n// 4. JSON-Text in ein echtes JavaScript-Objekt umwandeln\nlet summary;\n\ntry {\n  summary = JSON.parse(cleaned);\n} catch (error) {\n  throw new Error(`Summarizer output is not valid JSON: ${error.message}`);\n}\n\n// 5. Erlaubte Prioritäten festlegen\nconst allowedPriorities = ['low', 'medium', 'high'];\n\n// 6. summary validieren\nif (\n  typeof summary.summary !== 'string' ||\n  summary.summary.trim() === ''\n) {\n  throw new Error('\"summary\" must be a non-empty string.');\n}\n\n// 7. action_items validieren\nif (!Array.isArray(summary.action_items)) {\n  throw new Error('\"action_items\" must be an array.');\n}\n\nfor (const item of summary.action_items) {\n  if (typeof item !== 'string' || item.trim() === '') {\n    throw new Error(\n      'Every item inside \"action_items\" must be a non-empty string.'\n    );\n  }\n}\n\n// 8. deadline validieren\nif (\n  summary.deadline !== null &&\n  typeof summary.deadline !== 'string'\n) {\n  throw new Error('\"deadline\" must be a string or null.');\n}\n\n// 9. priority validieren\nif (\n  typeof summary.priority !== 'string' ||\n  !allowedPriorities.includes(summary.priority)\n) {\n  throw new Error(\n    '\"priority\" must be exactly one of: low, medium, high.'\n  );\n}\n\n// 10. Sauberen, normalisierten Output an die nächste Node weitergeben\nreturn {\n  json: {\n    valid: true,\n    summary: summary.summary.trim(),\n    action_items: summary.action_items.map(item => item.trim()),\n    deadline:\n      typeof summary.deadline === 'string'\n        ? summary.deadline.trim()\n        : null,\n    priority: summary.priority\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2464,
+        176
+      ],
+      "id": "42c79953-e073-4c4f-84c9-f5c7f4b52fcd",
+      "name": "Validate Fallback JSON",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2672,
+        80
+      ],
+      "id": "015874e1-c2e1-48f0-b6e8-840db65eaeac",
+      "name": "Merge Valid Results"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// ========================================\n// NORMALIZE OUTPUT - FINAL VERSION\n// ========================================\n\n// ---------- Helper: Text sauber machen ----------\nfunction cleanString(value, fallback = '') {\n  return typeof value === 'string'\n    ? value.trim()\n    : fallback;\n}\n\n\n// ---------- Helper: Deadline normalisieren ----------\nfunction normalizeDeadline(value) {\n\n  // Kein Wert vorhanden\n  if (!value || typeof value !== 'string') {\n    return null;\n  }\n\n  const original = value.trim();\n  const text = original.toLowerCase();\n\n  if (!text) {\n    return null;\n  }\n\n  // Bereits ISO?\n  const isoPattern =\n    /^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}(:\\d{2})?([+-]\\d{2}:\\d{2}|Z)?)?$/;\n\n  if (isoPattern.test(original)) {\n    return original;\n  }\n\n  // Uhrzeit finden\n  const timeMatch = text.match(/(\\d{1,2}):(\\d{2})/);\n\n  const hours = timeMatch\n    ? Number(timeMatch[1])\n    : 9;\n\n  const minutes = timeMatch\n    ? Number(timeMatch[2])\n    : 0;\n\n  const date = new Date();\n\n  date.setSeconds(0);\n  date.setMilliseconds(0);\n\n  // Relative Tage verstehen\n  if (\n    text.includes('tomorrow') ||\n    text.includes('morgen')\n  ) {\n    date.setDate(date.getDate() + 1);\n  }\n\n  else if (\n    text.includes('today') ||\n    text.includes('heute')\n  ) {\n    // Heute -> kein Tag addieren\n  }\n\n  else {\n    return null;\n  }\n\n  date.setHours(hours, minutes, 0, 0);\n\n  return date.toISOString();\n}\n\n\n// ========================================\n// SUBJECT AUS GMAIL\n// ========================================\n\nconst subject =\n  cleanString(\n    $('Gmail Trigger').item.json.Subject\n  );\n\n\n// ========================================\n// SENDER AUS GMAIL\n// ========================================\n\nconst senderRaw =\n  cleanString(\n    $('Gmail Trigger').item.json.From\n  );\n\nconst emailMatch =\n  senderRaw.match(\n    /<([^<>@\\s]+@[^<>@\\s]+)>|([^\\s<>]+@[^\\s<>]+)/\n  );\n\nconst sender =\n  emailMatch\n    ? (emailMatch[1] || emailMatch[2])\n    : '';\n\n\n// ========================================\n// CATEGORY AUS DEM CLASSIFIER\n// ========================================\n\nconst allowedCategories = [\n  'work',\n  'personal',\n  'finance',\n  'appointment',\n  'security',\n  'newsletter',\n  'promotion',\n  'other'\n];\n\nconst classifierCategory =\n  cleanString(\n    $('Validate Classification').item.json.category,\n    'other'\n  ).toLowerCase();\n\nconst category =\n  allowedCategories.includes(classifierCategory)\n    ? classifierCategory\n    : 'other';\n\n\n// ========================================\n// SUMMARY\n// ========================================\n\nconst summary =\n  cleanString($json.summary);\n\n\n// ========================================\n// ACTION ITEMS\n// ========================================\n\nconst actionItems =\n  Array.isArray($json.action_items)\n    ? $json.action_items\n        .filter(item =>\n          typeof item === 'string' &&\n          item.trim() !== ''\n        )\n        .map(item => item.trim())\n    : [];\n\n\n// ========================================\n// DEADLINE\n// ========================================\n\nconst deadline =\n  normalizeDeadline($json.deadline);\n\n\n// ========================================\n// PRIORITY\n// ========================================\n\nconst allowedPriorities = [\n  'low',\n  'medium',\n  'high'\n];\n\nconst rawPriority =\n  cleanString(\n    $json.priority,\n    'low'\n  ).toLowerCase();\n\nconst priority =\n  allowedPriorities.includes(rawPriority)\n    ? rawPriority\n    : 'low';\n\n\n// ========================================\n// FINAL OUTPUT\n// ========================================\n\nreturn {\n  json: {\n    subject,\n    sender,\n    category,\n    summary,\n    action_items: actionItems,\n    deadline,\n    priority,\n    processed_at: new Date().toISOString()\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2928,
+        96
+      ],
+      "id": "9a2fa663-7044-4873-9fc1-389b0f8e263a",
+      "name": "Normalize Output"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "dataSourceId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list",
+          "cachedResultName": "SELECT_YOUR_NOTION_DATABASE"
+        },
+        "title": "={{ $json.subject }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Summary|rich_text",
+              "textContent": "={{ $json.summary }}"
+            },
+            {
+              "key": "Priority|select",
+              "selectValue": "={{ $json.priority }}"
+            },
+            {
+              "key": "Category|select",
+              "selectValue": "={{ $json.category }}"
+            },
+            {
+              "key": "Action|rich_text",
+              "textContent": "={{ $json.action_items.join('; ') }}"
+            },
+            {
+              "key": "deadline|date",
+              "date": "={{ $json.deadline }}"
+            },
+            {
+              "key": "Sender|email",
+              "emailValue": "={{ $json.sender }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        3120,
+        112
+      ],
+      "id": "87a9ada7-116e-4fa6-a98b-e668df7e4fbe",
+      "name": "Create a database page"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4.1-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=Analyze the email below and classify it.\n\nReturn only a JSON object with exactly these fields:\n\nimportant: true or false\ncategory: one of [work, personal, finance, appointment, security, newsletter, promotion, other]\nreason: one short sentence\n\nAn email is important if it contains:\n- a deadline\n- a task or request\n- an appointment\n- financial information\n- a security or account issue\n- something that requires a response\n\nNewsletters and promotions are usually not important.\n\nEmail:{{\n  $(\"Get a message\").item.json.text?.trim()\n    ? $(\"Get a message\").item.json.text\n    : $(\"Get a message\").item.json.html\n}}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        160,
+        -16
+      ],
+      "id": "0d7ac0ef-9be3-4333-9dff-fa08864b18fd",
+      "name": "Classifier"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get a message": {
+      "main": [
+        [
+          {
+            "node": "Remove Duplicates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove Duplicates": {
+      "main": [
+        [
+          {
+            "node": "Classifier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Classification": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "AI Summarizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Summarizer": {
+      "main": [
+        [
+          {
+            "node": "Validate Summarizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retry Claude Summarizer": {
+      "main": [
+        [
+          {
+            "node": "Validate Retry JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Retry JSON": {
+      "main": [
+        [
+          {
+            "node": "Merge Valid Results",
+            "type": "main",
+            "index": 1
+          }
+        ],
+        [
+          {
+            "node": "Fallback OpenAI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fallback OpenAI": {
+      "main": [
+        [
+          {
+            "node": "Validate Fallback JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Fallback JSON": {
+      "main": [
+        [
+          {
+            "node": "Merge Valid Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Valid Results": {
+      "main": [
+        [
+          {
+            "node": "Normalize Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Output": {
+      "main": [
+        [
+          {
+            "node": "Create a database page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classifier": {
+      "main": [
+        [
+          {
+            "node": "Validate Classification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Summarizer": {
+      "main": [
+        [
+          {
+            "node": "Merge Valid Results",
+            "type": "main",
+            "index": 2
+          }
+        ],
+        [
+          {
+            "node": "Retry Claude Summarizer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "nodeGroups": [],
+  "tags": []
+}
