@@ -635,19 +635,14 @@ software pipeline.
 
 A simple repository structure can be:
 
-``` text
+```text
 ai-email-intelligence-system/
-|
-|-- README.md
-|-- workflow/
-|   `-- AI_Email_Intelligence_System_PUBLIC_FINAL.json
-|
-|-- docs/
-|   `-- screenshots/
-|
-`-- examples/
-    `-- sample-email.md
-```
+├── README.md
+├── LICENSE
+├── workflow/
+│   └── AI_Email_Intelligence_System_PUBLIC_FINAL.json
+└── examples/
+    └── example-email.md
 
 ## License
 
