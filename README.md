@@ -1,3 +1,4 @@
+<img width="1197" height="691" alt="Bildschirmfoto 2026-08-15 um 18 07 31" src="https://github.com/user-attachments/assets/2b0a86f9-89e8-49b3-8c8f-6bab4bdb03c7" />
 # AI Email Intelligence System
 
 A production-style AI email processing workflow built with **n8n**,
