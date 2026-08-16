@@ -944,6 +944,291 @@ The workflow included in this repository is intended to be a credential-free tem
 
 Each user should connect their own accounts and credentials after importing the workflow.
 
+## Credential Setup Guide
+
+The public workflow included in this repository does not contain active credentials, API keys, OAuth tokens, or private account information.
+
+Each user must connect their own Gmail, OpenAI, Anthropic Claude, and Notion accounts before running the workflow.
+
+> **Security:** Never commit API keys, access tokens, passwords, OAuth secrets, or other credentials to GitHub.
+
+### 1. Gmail Credential
+
+The Gmail Trigger and Gmail message nodes require access to your own Gmail account.
+
+In n8n:
+
+1. Open the **Gmail Trigger** node.
+2. Go to **Credential to connect with**.
+3. Create a new Gmail credential.
+4. Follow the Google authorization process.
+5. Sign in with the Gmail account you want the workflow to monitor.
+6. Grant the permissions required by n8n.
+7. Save the credential.
+8. Select the same Gmail credential in the Gmail nodes that require Gmail access.
+
+After connecting Gmail, configure the Gmail Trigger filter.
+
+The public workflow contains the placeholder:
+
+```text
+-from:YOUR_EMAIL@example.com
+```
+
+Replace:
+
+```text
+YOUR_EMAIL@example.com
+```
+
+with your own email address.
+
+Example:
+
+```text
+-from:john@example.com
+```
+
+This can help prevent emails sent from your own address from triggering the workflow.
+
+For testing, you can send an email from a different email account to the Gmail account connected to n8n.
+
+---
+
+### 2. OpenAI Credential
+
+The workflow uses OpenAI for AI-based email processing and as part of the fallback architecture.
+
+You must use your own OpenAI API account and API key.
+
+#### Create an OpenAI API Key
+
+1. Sign in to the OpenAI API platform.
+2. Open the API key section of your account or project.
+3. Create a new secret API key.
+4. Copy the key and store it securely.
+
+Your API key is a secret.
+
+Never:
+
+- publish it on GitHub
+- include it inside the workflow JSON
+- put it inside the README
+- send it to another user
+- expose it in screenshots
+
+#### Connect OpenAI to n8n
+
+In n8n:
+
+1. Open an OpenAI node used by the workflow.
+2. Open **Credential to connect with**.
+3. Create a new OpenAI credential.
+4. Paste your own OpenAI API key into the required API key field.
+5. Save the credential.
+6. Select this credential in the OpenAI nodes used by the workflow.
+
+Repeat this for any OpenAI node that is not already using the credential.
+
+Make sure your OpenAI API account has access to the model configured in the workflow and sufficient API usage capacity for testing.
+
+---
+
+### 3. Anthropic Claude Credential
+
+The workflow uses Anthropic Claude as part of the AI summarization and reliability pipeline.
+
+You must provide your own Anthropic API credentials.
+
+#### Create an Anthropic API Key
+
+1. Sign in to the Anthropic Console.
+2. Open the API key section.
+3. Create a new API key.
+4. Copy the key.
+5. Store it securely.
+
+Do not publish the Anthropic API key or include it in the repository.
+
+#### Connect Claude to n8n
+
+In n8n:
+
+1. Open the Claude/Anthropic node.
+2. Open **Credential to connect with**.
+3. Create a new Anthropic credential.
+4. Enter your Anthropic API key.
+5. Save the credential.
+6. Select the credential in the Claude nodes used by the workflow.
+
+Make sure your Anthropic account has access to the model configured in the workflow and sufficient API usage capacity.
+
+The workflow may use Claude more than once because the reliability architecture includes retry logic.
+
+Therefore, verify that all relevant Claude nodes use your own credential.
+
+---
+
+### 4. Notion Credential
+
+The final processed email data is stored in a Notion database.
+
+You need:
+
+- a Notion account
+- a Notion database
+- permission for the integration to access that database
+- a Notion credential connected to n8n
+
+#### Create a Notion Connection
+
+In Notion:
+
+1. Open **Settings**.
+2. Open **Connections**.
+3. Create or configure a connection for API access.
+4. Select the workspace that contains your database.
+5. Configure the required permissions.
+6. Obtain the integration/access token if required by your n8n credential method.
+7. Store the token securely.
+
+The connection must have sufficient permission to create content in the database used by the workflow.
+
+#### Give the Connection Access to the Database
+
+Creating a Notion connection alone is not enough.
+
+The connection must also have access to the page or database used by the workflow.
+
+Open the relevant Notion page/database and add the connection to it using Notion's connection/access settings.
+
+Without database access, n8n may authenticate successfully but still fail when trying to create a database entry.
+
+#### Connect Notion to n8n
+
+In n8n:
+
+1. Open the final **Notion** node.
+2. Open **Credential to connect with**.
+3. Create a new Notion credential.
+4. Complete the required authentication or enter the required integration token.
+5. Save the credential.
+6. Select your Notion database in the node.
+
+Make sure the database properties match the fields expected by the workflow.
+
+---
+
+### 5. Verify All Credentials
+
+Before executing the complete workflow, verify that every external service is connected.
+
+You should have working credentials for:
+
+```text
+Gmail
+OpenAI
+Anthropic Claude
+Notion
+```
+
+Open each external-service node and confirm that it uses your own credential.
+
+Do not assume that importing the workflow automatically configures credentials.
+
+The workflow JSON provides the automation logic, but every user must configure their own external accounts.
+
+---
+
+### 6. API Usage and Costs
+
+OpenAI and Anthropic API usage may generate charges depending on the models, account, and amount of processing used.
+
+API access and consumer chatbot subscriptions are separate services.
+
+Before running large tests or processing real email traffic:
+
+- review your API account settings
+- review current API pricing
+- configure appropriate spending limits where available
+- monitor API usage
+- start with a small number of test emails
+
+This project does not provide API credits.
+
+Each user is responsible for their own API accounts and usage costs.
+
+---
+
+### 7. Test Credentials Before Production Use
+
+Do not immediately activate the workflow for a busy Gmail inbox.
+
+First perform a controlled test.
+
+Recommended sequence:
+
+```text
+Connect Gmail
+      ↓
+Connect OpenAI
+      ↓
+Connect Anthropic Claude
+      ↓
+Connect Notion
+      ↓
+Verify Notion Database Access
+      ↓
+Send One Test Email
+      ↓
+Execute Workflow
+      ↓
+Inspect Every Node
+      ↓
+Verify Notion Output
+      ↓
+Activate Workflow
+```
+
+If a node fails, inspect that node before continuing.
+
+Common causes include:
+
+- missing credentials
+- invalid or expired API keys
+- insufficient API access
+- incorrect Gmail authorization
+- incorrect Gmail filter
+- missing Notion database permissions
+- incorrect Notion database selection
+- unavailable AI model
+- insufficient API balance or usage limits
+
+---
+
+### 8. Credential Security
+
+Credentials should always remain private.
+
+Never include real secrets in:
+
+```text
+README.md
+workflow JSON files
+GitHub commits
+screenshots
+example files
+documentation
+public issue reports
+```
+
+If an API key or access token is accidentally published, revoke or rotate it immediately through the corresponding service.
+
+The public workflow in this repository is designed to contain workflow logic only.
+
+Users are expected to supply their own credentials after importing the workflow.
+
 ## Reliability Design
 
 This project deliberately adds reliability layers around probabilistic
