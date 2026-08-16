@@ -537,6 +537,413 @@ Also test edge cases such as:
 -   malformed AI output
 -   a duplicate message
 
+-   ## How to Run This Workflow
+
+This section explains how another user can run and test the AI Email Intelligence System locally using n8n.
+
+### 1. Install Docker
+
+Install Docker Desktop on your computer and make sure Docker is running.
+
+### 2. Start n8n with Docker
+
+Create a persistent Docker volume:
+
+```bash
+docker volume create n8n_data
+```
+
+Start n8n:
+
+```bash
+docker run -it --rm \
+  --name n8n \
+  -p 5678:5678 \
+  -v n8n_data:/home/node/.n8n \
+  docker.n8n.io/n8nio/n8n
+```
+
+After n8n starts, open the following address in your browser:
+
+```text
+http://localhost:5678
+```
+
+You should now see the n8n interface.
+
+### 3. Import the Workflow
+
+Download the public workflow file from this repository:
+
+```text
+workflow/AI_Email_Intelligence_System_PUBLIC_FINAL.json
+```
+
+Then, inside n8n:
+
+1. Open **Workflows**.
+2. Select **Import from File**.
+3. Choose the downloaded JSON workflow file.
+4. Save the imported workflow.
+
+### 4. Configure Your Credentials
+
+For security reasons, the public workflow does not contain working credentials, API keys, or private account information.
+
+Create and connect your own credentials for:
+
+- Gmail
+- OpenAI
+- Anthropic Claude
+- Notion
+
+Never share API keys, passwords, OAuth tokens, or other credentials inside a public GitHub repository.
+
+### 5. Configure the Gmail Trigger
+
+Open the **Gmail Trigger** node in the imported workflow.
+
+The public workflow contains the following placeholder filter:
+
+```text
+-from:YOUR_EMAIL@example.com
+```
+
+Replace:
+
+```text
+YOUR_EMAIL@example.com
+```
+
+with your own email address if you want to prevent emails sent from your own account from triggering the workflow.
+
+For example:
+
+```text
+-from:john@example.com
+```
+
+The Gmail Trigger monitors the connected Gmail account and starts the workflow when a new email matching the configured conditions is received.
+
+Make sure that:
+
+- your Gmail credential is connected
+- the Gmail Trigger is enabled
+- the filter contains the correct email address
+- the workflow is active when testing automatic execution
+
+### 6. Configure the Notion Database
+
+Create a Notion database that contains the properties required by the workflow.
+
+Recommended properties:
+
+| Property | Notion Type |
+| --- | --- |
+| Email Subject | Title |
+| Summary | Text |
+| Priority | Select |
+| Category | Select |
+| Action | Text |
+| Deadline | Date |
+| Sender | Email |
+| Processed At | Date |
+
+Create the following options for **Priority**:
+
+```text
+low
+medium
+high
+```
+
+Create the following options for **Category**:
+
+```text
+work
+personal
+finance
+appointment
+security
+newsletter
+promotion
+other
+```
+
+Connect your Notion integration to this database.
+
+Then open the final Notion node in the n8n workflow and select your own Notion database.
+
+Make sure the Notion integration has permission to access the database.
+
+### 7. Test the Workflow
+
+Before using the workflow in production, perform a controlled test.
+
+Send a test email to the Gmail account connected to the workflow.
+
+Example test email:
+
+```text
+Subject: Urgent: Customer presentation due tomorrow
+
+Hi,
+
+please check the latest sales figures, update the Excel file,
+and send me the corrected version by tomorrow at 13:00.
+
+The customer presentation is scheduled for tomorrow afternoon.
+
+Thanks.
+```
+
+This test email contains:
+
+- a clear business task
+- multiple action items
+- a deadline
+- enough context for AI classification and summarization
+
+The expected processing path is:
+
+```text
+Gmail Trigger
+↓
+Get a Message
+↓
+Remove Duplicates
+↓
+OpenAI Classifier
+↓
+Validate Classification
+↓
+Important?
+↓
+Claude Summarizer
+↓
+Validate Summarizer
+↓
+Retry Claude if required
+↓
+OpenAI Fallback if required
+↓
+Merge Valid Results
+↓
+Normalize Output
+↓
+Notion
+```
+
+If the primary Claude output is valid, the retry and fallback paths are not required.
+
+If validation fails, the workflow automatically attempts recovery through the configured retry and fallback logic.
+
+### 8. Verify the Workflow Execution
+
+After sending the test email, open the workflow execution in n8n.
+
+A successful execution should show the relevant processing nodes completing successfully.
+
+Check that:
+
+- Gmail detected the message
+- the complete email was retrieved
+- duplicate prevention completed
+- the email was classified correctly
+- important emails entered the summarization branch
+- the AI output passed validation
+- the final data was normalized
+- the Notion node completed successfully
+
+### 9. Verify the Result in Notion
+
+Open your Notion database.
+
+A successfully processed email should create a new database entry containing information similar to:
+
+```text
+Email Subject: Urgent: Customer presentation due tomorrow
+Priority: high
+Category: work
+Deadline: extracted and normalized deadline
+Summary: AI-generated factual summary
+Action Items: extracted tasks
+Sender: original sender email address
+Processed At: workflow processing timestamp
+```
+
+The exact summary and action-item wording may vary because the content is generated by an AI model.
+
+### 10. Test a Non-Important Email
+
+It is also recommended to test the classification branch with a non-important message.
+
+For example:
+
+```text
+Subject: Weekly Newsletter
+
+Hi,
+
+here is this week's newsletter with our latest articles and updates.
+
+Have a great weekend.
+```
+
+The classifier should normally categorize this type of message as:
+
+```json
+{
+  "important": false,
+  "category": "newsletter",
+  "reason": "The email is informational and does not require immediate action."
+}
+```
+
+Because the email is not important, it should not continue through the expensive AI summarization pipeline.
+
+### 11. Test Duplicate Prevention
+
+To verify duplicate handling, make sure the same Gmail message is not processed repeatedly.
+
+The workflow uses the Gmail message ID to identify messages that have already been processed during the relevant workflow execution logic.
+
+This helps prevent duplicate Notion entries and unnecessary AI API calls.
+
+### 12. Activate the Workflow
+
+After all tests complete successfully, activate the workflow in n8n.
+
+From that point on, new emails matching the Gmail Trigger conditions can automatically start the workflow.
+
+The production flow becomes:
+
+```text
+New Gmail Message
+        ↓
+Automatic Classification
+        ↓
+Important?
+     /       \
+   No         Yes
+   ↓           ↓
+ Stop     AI Processing
+              ↓
+         Validation
+              ↓
+      Retry / Fallback
+              ↓
+        Normalization
+              ↓
+            Notion
+```
+
+## Troubleshooting
+
+### Workflow Does Not Start
+
+Check that:
+
+- the Gmail credential is connected
+- the workflow is active
+- the Gmail Trigger is configured correctly
+- the Gmail filter is correct
+- the incoming email matches the trigger conditions
+
+### Gmail Trigger Does Not Detect the Test Email
+
+Check the Gmail Trigger filter.
+
+If you use:
+
+```text
+-from:YOUR_EMAIL@example.com
+```
+
+emails sent from that address will be excluded.
+
+For testing, send the message from another email account or temporarily adjust the filter.
+
+### OpenAI Node Fails
+
+Check:
+
+- OpenAI credentials
+- API key validity
+- available API credits
+- selected model
+- API connectivity
+
+### Claude Node Fails
+
+Check:
+
+- Anthropic credentials
+- API key validity
+- available API credits
+- selected Claude model
+- API connectivity
+
+The workflow includes retry and fallback logic for invalid AI-generated output, but invalid or missing API credentials must still be fixed manually.
+
+### AI Output Fails Validation
+
+The workflow expects structured JSON.
+
+If the primary AI response does not match the expected structure, the validation layer rejects it.
+
+The workflow can then use:
+
+```text
+Primary AI
+↓
+Validation Failure
+↓
+Retry
+↓
+Validation
+↓
+Fallback Model
+↓
+Validation
+```
+
+This behavior is intentional and is one of the reliability mechanisms built into the project.
+
+### Notion Node Fails
+
+Check that:
+
+- the Notion credential is connected
+- the Notion integration has access to the database
+- the correct database is selected
+- database property names match the workflow
+- database property types are correct
+- the deadline contains a valid date value
+
+### Workflow Works Manually but Not Automatically
+
+Make sure the workflow is **activated**.
+
+Manual execution is useful during development and testing, but the Gmail Trigger requires an active workflow for normal automatic operation.
+
+## Security Reminder
+
+Do not publish or share:
+
+- Gmail credentials
+- OpenAI API keys
+- Anthropic API keys
+- Notion API tokens
+- OAuth tokens
+- real customer emails
+- private email content
+- personally identifiable information
+
+The workflow included in this repository is intended to be a credential-free template.
+
+Each user should connect their own accounts and credentials after importing the workflow.
+
 ## Reliability Design
 
 This project deliberately adds reliability layers around probabilistic
